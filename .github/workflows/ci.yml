@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test
+        # 测试必须能在无 API Key 的机器上全绿：这是 MockProvider 存在的意义，
+        # CI 里不配任何 secret（tests/conftest.py 的 cfg fixture 显式传空 key）。
+        # --basetemp 指向工作区，父目录由 conftest 的 pytest_configure 补出——
+        # 干净克隆上没有 .pytest_tmp/，早先这条命令在 CI 上是跑不起来的。
+        env:
+          DASHSCOPE_API_KEY: ""
+        run: pytest tests/unit tests/integration -q --basetemp=.pytest_tmp/ci
+
+      - name: Config guard
+        # 配置树的启动校验是硬性的，单独一步跑：配置被改坏时要以独立步骤失败。
+        # 逻辑放在脚本里而不是 YAML 内联 python，见 scripts/check_config_guard.py 顶部说明。
+        env:
+          DASHSCOPE_API_KEY: ""
+        run: python scripts/check_config_guard.py
+
+      - name: Package build
+        # 只防两类"本机能跑、别人装不上"的问题（docs/06 的 N1 / N2）：
+        # ① pyproject 的 setuptools schema 必须合法（where 写成字符串会直接拒绝构建）；
+        # ② 运行期资产 prompts/*.md 必须真的进包，漏了只会在安装后 KeyError。
+        run: |
+          python -m pip wheel . --no-deps -w /tmp/wheel
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheel = glob.glob("/tmp/wheel/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          prompts = [n for n in names if "/prompts/" in n and n.endswith(".md")]
+          assert len(prompts) >= 10, f"wheel 里缺提示词模板，只有 {len(prompts)} 个: {prompts}"
+          print(f"{wheel}: {len(names)} 个条目，{len(prompts)} 个提示词模板")
+          PY

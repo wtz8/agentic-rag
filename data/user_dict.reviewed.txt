@@ -1,0 +1,117 @@
+# jieba 用户词典 · 人工过筛清单
+# ---------------------------------------------------------------------------
+# 用途：这是 scripts/build_user_dict.py 自动抽取出的 Top-300 候选词，
+#       经人工过筛后保留的词表。最终产物 data/user_dict.txt 由本文件生成。
+#
+# 过筛判据（只有一条）：
+#   **jieba 默认词典已经能切对的词，不进用户词典。**
+#   用户词典的价值在于"通用分词器会切错的那部分"——产品名、模型名、
+#   库名、缩写、指标名、编号。把"模型""函数""参数"这类通用词塞进来，
+#   除了让复合词被过度合并之外没有任何收益。
+#
+# 因此被删掉的主要是三类：
+#   ① 代码与排版噪声：boldsymbol / mathbf / frac / import / pip / torch /
+#      json / path / print / sum / left / right / input / True / False / None …
+#      （它们来自代码块与 LaTeX 公式，不是术语）
+#   ② 通用中文词：模型 / 函数 / 参数 / 文档 / 文本 / 数据 / 内容 / 方法 /
+#      问题 / 结果 / 示例 / 代码 / 步骤 / 情况 / 部分 / 注意 / 说明 …
+#   ③ 泛化表述：实际 / 代表 / 无法 / 所需 / 思路 / 目标 / 流程 / 阶段 …
+#
+# 重新生成流程：
+#   python scripts/build_user_dict.py --report     # 重新抽取候选
+#   # 人工过筛后覆盖本文件
+#   python scripts/build_user_dict.py --reviewed   # 写回 data/user_dict.txt
+# ---------------------------------------------------------------------------
+
+# ---- 模型 / 产品名（中英）----
+Qwen
+Qwen2
+Qwen3
+ChatGLM3
+GLM
+LLaMA
+DeepSeek
+Hunyuan
+MiniMax
+MiniMaxAI
+ChatGPT
+GPT
+BERT
+Instruct
+Flash
+
+# ---- 机器学习 / 大模型术语 ----
+LLM
+RAG
+NLP
+SFT
+RLHF
+GRPO
+CLM
+MLM
+Transformer
+Transformers
+Encoder
+Decoder
+Attention
+LoRA
+Lora
+知识库
+语料
+分词器
+微调
+归一化
+掩码
+键值
+注意力
+向量
+嵌入
+梯度
+损失
+误差
+特征
+概率
+矩阵
+维度
+温度
+分类器
+正例
+反例
+神经网络
+人工智能
+自然语言
+语义
+空间
+模态
+序列
+分类
+部署
+架构
+指令
+
+# ---- 库 / 框架 / 接口名 ----
+AutoTokenizer
+AutoModel
+AutoModelForCausalLM
+PeftModel
+LoraConfig
+TrainingArguments
+GenerationConfig
+SamplingParams
+DataCollatorForSeq2Seq
+SwanLabCallback
+HuggingFace
+LangChain
+Milvus
+FAISS
+vLLM
+VLLM
+PyTorch
+FastAPI
+Elasticsearch
+OpenAI
+Python
+CUDA
+GPU
+arXiv
+Datawhale

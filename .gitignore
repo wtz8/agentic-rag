@@ -1,0 +1,53 @@
+# 凭据（最高优先级：本项目要公开到 GitHub，泄露即作废）
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# 语料与索引产物（体积大且可重建）
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/MANIFEST.md
+# manifest_detail.json 含每篇语料的 sha256，MANIFEST 承诺按它校验，属于资产
+# 注意：gitignore 不支持行内注释，"!pattern  # 注释" 会把注释当成模式的一部分而失效
+!data/raw/manifest_detail.json
+data/index/
+data/rejected/
+data/traces/
+data/cache/
+# 词典产物进仓库（data/user_dict.txt 与 user_dict.reviewed.txt）；
+# 自动抽取的原始候选 data/user_dict.candidates.txt 可重建，不入库
+data/user_dict.candidates.txt
+
+# 评测与运行产物
+eval/results/
+# 消融变体的重建索引（B2 等换切分策略时由 eval runner 自动生成）
+data/index_eval/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.venv-corpus/
+venv/
+.pytest_cache/
+# 测试临时目录：pytest 会自动清理旧 basetemp，默认落在系统 temp 会触发删除确认，
+# 因此显式指到工作区（--basetemp=.pytest_tmp/），产物不入库
+.pytest_tmp/
+# 标注挖掘的中间产物（物化视图副本、候选生成脚本），用完即弃
+.tmp_mining/
+.ruff_cache/
+
+# 工具数据（非源码，含会话记忆）
+.workbuddy/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

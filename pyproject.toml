@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-rag"
+version = "0.1.0"
+description = "面向企业异构文档的 Agentic RAG 系统：自适应路由 + 混合检索 + 反思闭环 + 引用溯源 + 可评测"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    # 编排
+    "langgraph>=0.2",
+    # 模型供给（直连 REST，不用厂商 SDK）
+    "httpx>=0.27",
+    # 向量库
+    "qdrant-client>=1.12",
+    # 中文分词（自研 BM25 依赖）
+    "jieba>=0.42",
+    # 文档解析
+    # pymupdf4llm 必须锁 <2：2.0 起 PyPI 上的 pymupdf4llm 变成**空壳包**
+    # （模块被并进 pymupdf 2.x，还额外需要 psutil），装上后 `import pymupdf4llm` 直接失败；
+    # 而 2.x 的逐页 API 行为与本项目按 1.x 契约实现的页码恢复不一致（见 docs/06 N9）。
+    "pymupdf4llm>=1.28,<2",
+    "pymupdf>=1.28,<2",  # 代码里直接 `import fitz`（PDF 后端探测与 words 级取词）
+    "markitdown>=0.1",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "python-pptx>=0.6",
+    "pypdf>=4.0",
+    "beautifulsoup4>=4.12",
+    # 服务
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.5",  # HTTP 边界模型（FastAPI 会装，但这里直接 import，必须显式声明）
+    # 数值与 token 计数
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyyaml>=6"]  # pyyaml 只用于 CI 工作流本身的 YAML 校验测试
+# 可选 heavy 解析后端：扫描件与复杂版面才需要，体积大，默认不装
+heavy = ["docling>=2"]
+
+[project.scripts]
+agentic-rag = "agentic_rag.cli:main"
+
+[tool.setuptools.packages.find]
+# 必须是数组：setuptools 的 pyproject schema 只接受 ["src"]，
+# 写成字符串 "src" 时 setuptools>=70 直接拒绝构建（`pip install -e .` 第一步就失败）。
+where = ["src"]
+
+[tool.setuptools.package-data]
+# 提示词模板是运行期资产：只装包数据里没有它，安装后 get_prompt() 会 KeyError。
+agentic_rag = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning"]

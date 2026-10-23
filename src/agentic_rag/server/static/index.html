@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>企业文档问答 · Agentic RAG</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6ea; --ink: #1c2024;
+    --muted: #6b7280; --accent: #2563eb; --ok: #15803d; --warn: #b45309;
+    --bad: #b91c1c; --chip: #eef2f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { padding: 12px 18px; background: var(--panel); border-bottom: 1px solid var(--line);
+           display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  .wrap { display: grid; grid-template-columns: 260px 1fr 320px; gap: 12px; padding: 12px; height: calc(100vh - 52px); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: auto; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  h2 + * { margin-top: 0; }
+  .stat { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .stat span:last-child { color: var(--muted); }
+  .docs { font-size: 12px; max-height: 220px; overflow: auto; }
+  .docs div { padding: 2px 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .switch { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  #chat { display: flex; flex-direction: column; }
+  #log { flex: 1; overflow: auto; padding: 4px 2px 12px; }
+  .msg { margin: 10px 0; }
+  .msg.q { text-align: right; }
+  .msg.q div { display: inline-block; background: var(--accent); color: #fff; padding: 8px 12px; border-radius: 12px 12px 2px 12px; }
+  .msg.a div.body { background: var(--chip); padding: 10px 12px; border-radius: 12px 12px 12px 2px; white-space: pre-wrap; }
+  .badge { font-size: 11px; padding: 1px 6px; border-radius: 6px; margin-left: 6px; }
+  .badge.high { background: #dcfce7; color: var(--ok); }
+  .badge.medium { background: #fef3c7; color: var(--warn); }
+  .badge.low { background: #fee2e2; color: var(--bad); }
+  sup { cursor: pointer; color: var(--accent); font-weight: 600; padding: 0 1px; }
+  .cites { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .cites li { margin: 4px 0; }
+  form { display: flex; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+  input[type=text] { flex: 1; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+  button { padding: 9px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .55; cursor: default; }
+  .tl { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .tl li { padding: 6px 0 6px 22px; border-left: 2px solid var(--line); position: relative; }
+  .tl li::before { content: ""; position: absolute; left: -6px; top: 12px; width: 10px; height: 10px;
+                   border-radius: 50%; background: var(--accent); }
+  .tl li small { color: var(--muted); display: block; font-size: 11px; }
+  .tl li.plain::before { background: var(--muted); }
+  .tl li.bad::before { background: var(--bad); }
+  pre.ctx { font-size: 11px; background: var(--chip); padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; margin: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>企业文档问答 · Agentic RAG</h1>
+  <span class="meta" id="mode">加载中…</span>
+</header>
+
+<div class="wrap">
+  <aside class="panel">
+    <h2>索引</h2>
+    <div id="stats"></div>
+    <h2 style="margin-top:14px">已入库文档</h2>
+    <div class="docs" id="docs"></div>
+    <h2 style="margin-top:14px">检索开关（演示消融）</h2>
+    <div id="switches"></div>
+    <div class="meta" id="sig" style="margin-top:8px;font-size:11px;word-break:break-all"></div>
+  </aside>
+
+  <section class="panel" id="chat">
+    <div id="log"></div>
+    <form id="form">
+      <input type="text" id="q" placeholder="问问已入库的资料（回车发送）" autocomplete="off" />
+      <button id="send">发送</button>
+    </form>
+  </section>
+
+  <aside class="panel">
+    <h2>Agent 决策时间线</h2>
+    <ul class="tl" id="timeline"></ul>
+    <h2 style="margin-top:14px">候选片段</h2>
+    <div id="ctx"></div>
+  </aside>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LABEL = {
+  route: "意图路由", rewrite: "查询改写", retrieve: "混合召回", reflect: "充分性反思",
+  rerank: "精排 + 父块回填", generate: "生成", verify: "引用校验", regenerate: "重生成",
+  degrade: "拒答", token: "流式输出", citation: "引用", cache_hit: "缓存命中", done: "完成", error: "错误",
+};
+
+async function loadStats() {
+  const r = await fetch("/api/stats").then((x) => x.json());
+  $("mode").textContent = `供给模式 ${r.provider_mode} · 后端 ${r.backend} · 版本 ${String(r.index_version).slice(0, 12)}…`;
+  $("stats").innerHTML = [
+    ["文档数", r.documents], ["检索单元", r.chunks], ["父块", r.parents], ["向量数", r.vectors],
+    ["BM25", r.bm25_available ? "可用" : "不可用"], ["切分策略", r.chunk_strategy],
+    ["版本一致", r.index_version_matches ? "是" : "否"],
+  ].map(([k, v]) => `<div class="stat"><span>${k}</span><span>${v}</span></div>`).join("");
+  $("docs").innerHTML = (r.sources || []).map((s) => `<div title="${s}">${s}</div>`).join("") || "（空）";
+}
+
+async function loadConfig() {
+  const c = await fetch("/api/config").then((x) => x.json());
+  const keys = ["use_vector", "use_bm25", "use_rerank", "filter_tables_only", "min_candidates", "sufficiency_vector_floor"];
+  $("switches").innerHTML = keys.map((k) => {
+    const v = c[k];
+    const ctl = typeof v === "boolean"
+      ? `<input type="checkbox" data-k="${k}" ${v ? "checked" : ""}>`
+      : `<input type="number" data-k="${k}" value="${v}" step="${k === "min_candidates" ? 1 : 0.05}" style="width:64px">`;
+    return `<div class="switch"><span>${k}</span>${ctl}</div>`;
+  }).join("");
+  $("switches").querySelectorAll("input").forEach((el) => {
+    el.onchange = async () => {
+      const body = {};
+      body[el.dataset.k] = el.type === "checkbox" ? el.checked : Number(el.value);
+      const res = await fetch("/api/config", {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+      });
+      if (!res.ok) { alert(await res.text()); return loadConfig(); }
+      const n = await res.json();
+      $("sig").textContent = "retrieval_signature " + n.retrieval_signature;
+    };
+  });
+  $("sig").textContent = "retrieval_signature " + c.retrieval_signature;
+}
+
+function timeline(type, data) {
+  const li = document.createElement("li");
+  const detail = type === "route" ? `intent=${data.intent ?? ""} 置信度=${data.confidence ?? ""}`
+    : type === "retrieve" ? `向量 ${data.vector_hits ?? 0} · BM25 ${data.bm25_hits ?? 0} · 融合 ${(data.fused || []).length}`
+    : type === "reflect" ? `达标 ${data.strong}/${data.min_candidates} · 判据 ${data.sufficiency_basis} · ${data.sufficient ? "充分" : "不足"}`
+    : type === "rerank" ? `返回 ${data.returned} · 折叠 ${data.dedup_collapsed}`
+    : type === "verify" ? `命题 ${data.claims} · 未支撑 ${(data.unsupported || []).length} · 忠实度 ${data.faithfulness}`
+    : type === "done" ? `置信度 ${data.confidence} · trace ${data.trace_id}`
+    : type === "rewrite" ? `策略 ${data.strategy} · ${(data.sub_queries || []).length} 条`
+    : type === "degrade" ? `原因 ${data.reason} · 候选 ${data.candidates}`
+    : type === "error" ? String(data.message || "")
+    : "";
+  li.className = (type === "degrade" || type === "error") ? "bad" : (type === "token" ? "plain" : "");
+  li.innerHTML = `${LABEL[type] || type}${detail ? `<small>${detail}</small>` : ""}`;
+  $("timeline").appendChild(li);
+}
+
+function addAnswer() {
+  const d = document.createElement("div");
+  d.className = "msg a";
+  d.innerHTML = `<div class="body"></div><div class="cites"><ul></ul></div>`;
+  $("log").appendChild(d);
+  return d;
+}
+
+async function ask(query) {
+  const log = $("log");
+  const q = document.createElement("div");
+  q.className = "msg q";
+  q.innerHTML = `<div>${query.replace(/</g, "&lt;")}</div>`;
+  log.appendChild(q);
+  $("timeline").innerHTML = "";
+  $("ctx").innerHTML = "";
+  const ans = addAnswer();
+  const body = ans.querySelector(".body");
+  const cites = ans.querySelector(".cites ul");
+  $("send").disabled = true;
+
+  const res = await fetch("/api/ask", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({query, history: []}),
+  });
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream: true});
+    const parts = buf.split("\n\n");
+    buf = parts.pop();
+    for (const part of parts) {
+      const ev = part.match(/^event: (\S+)\ndata: (.*)$/);
+      if (!ev) continue;
+      const type = ev[1];
+      let data = {};
+      try { data = JSON.parse(ev[2]); } catch (e) { data = {}; }
+      timeline(type, data);
+      if (type === "token") body.textContent += data.text;
+      if (type === "citation") {
+        const li = document.createElement("li");
+        li.innerHTML = `[${data.index}] ${data.source}｜${(data.title_path || []).join(" > ") || "（无标题）"}` +
+          (data.page ? `｜P${data.page}` : "") + `<br><span style="color:#374151">${data.quote || ""}</span>`;
+        cites.appendChild(li);
+      }
+      if (type === "retrieve" && data.fused) {
+        $("ctx").innerHTML = `<div style="font-size:11px;color:#6b7280">本次召回 ${data.fused.length} 条（前 5 条 id）</div>` +
+          data.fused.slice(0, 5).map((c) => `<pre class="ctx">${c}</pre>`).join("");
+      }
+      if (type === "done") {
+        const b = document.createElement("span");
+        b.className = "badge " + data.confidence;
+        b.textContent = data.confidence;
+        ans.querySelector(".body").appendChild(b);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+  $("send").disabled = false;
+}
+
+$("form").onsubmit = (e) => {
+  e.preventDefault();
+  const v = $("q").value.trim();
+  if (!v) return;
+  $("q").value = "";
+  ask(v);
+};
+
+loadStats().catch((e) => ($("mode").textContent = "索引未就绪：" + e));
+loadConfig().catch(() => {});
+</script>
+</body>
+</html>

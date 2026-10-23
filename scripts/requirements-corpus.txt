@@ -1,0 +1,22 @@
+# 语料构建期依赖 —— 与项目运行时依赖严格分离
+#
+# 三条分离理由：
+#  1. 许可隔离：这里允许出现运行时不愿引入的库。运行时 PDF 后端因 AGPL-3.0
+#     对 PyMuPDF 保持警惕（见 README 许可章节），构建脚本索性一律不用它，
+#     只用宽松许可库。构建工具不随项目发布，即便引入也不会传染交付物。
+#  2. 体积隔离：numpy / Pillow 对运行时毫无用处，不该进部署镜像。
+#  3. 复现隔离：语料构建是一次性动作，版本漂移不影响线上行为。
+#
+# 安装：
+#   python -m venv .venv-corpus
+#   .venv-corpus/Scripts/pip install -r scripts/requirements-corpus.txt
+
+requests>=2.31            # 下载（带重试与超时）
+beautifulsoup4>=4.12      # HTML 正文抽取
+lxml>=5.0                 # bs4 解析器后端
+pypdf>=4.2                # 读取 PDF 文本层、页数统计（验证扫描件无文本层）
+Pillow>=10.0              # 渲染位图、生成扫描件 PDF、做噪声与仿射变换
+numpy>=1.26               # 生成噪点与阴影梯度
+python-docx>=1.1          # 生成 DOCX 语料
+python-pptx>=0.6          # 生成 PPTX 语料
+openpyxl>=3.1             # 生成 XLSX 语料

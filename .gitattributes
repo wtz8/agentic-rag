@@ -1,0 +1,17 @@
+# 统一行尾：库中一律 LF，检出时按平台转换
+* text=auto eol=lf
+
+# 设计文档与配置
+*.md text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 二进制不参与转换与 diff
+*.pdf binary
+*.png binary
+*.jpg binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
